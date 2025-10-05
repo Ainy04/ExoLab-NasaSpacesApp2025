@@ -1,0 +1,6 @@
+[theme]
+primaryColor = "#89BBFE"                # Color principal (ejemplo: azul)
+backgroundColor = "#111827"             # Fondo principal
+secondaryBackgroundColor = "#23314E"    # Fondo secundario (por ejemplo, de la barra lateral)
+textColor = "#fff"                   # Color del texto
+font = "sans serif"                     # Puedes elegir: "serif", "sans serif", "monospace"
