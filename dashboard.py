@@ -197,7 +197,7 @@ with st.sidebar:
             if not st.session_state['training_in_progress']:
                 st.session_state['training_in_progress'] = True
                 st.rerun()
-
+    
     if st.session_state['training_in_progress']:
         import time
 
