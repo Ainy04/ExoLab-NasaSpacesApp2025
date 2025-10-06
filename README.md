@@ -65,7 +65,7 @@ Access through your browser, upload a CSV, and discover exoplanets like never be
 
 ## Team
 **Astro404**
-- Coordination, design, data science, ML, and development: [Ainy04](https://github.com/Ainy04) and collaborators from NASA Space Apps MX/CDMX.
+- Coordination, design, data science, ML, and development: Ainy Contreras Mendoza, Daniel Tornero Solano, Juan Daniel Gonzales Reyes, Jorge Alberto Ruiz Rodriguez, Juan Carlos Cruz Hernandez and Josue Robledo Zuñiga.
 
 ## Useful Resources
 - Example datasets (/data folder)
@@ -76,3 +76,4 @@ Access through your browser, upload a CSV, and discover exoplanets like never be
 ## License
 Open source project presented for NASA Space Apps Challenge 2025.  
 Developed by Astro404. All rights reserved.
+
