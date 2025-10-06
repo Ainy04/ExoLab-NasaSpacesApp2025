@@ -1,87 +1,78 @@
 # ExoLab Dashboard — NASA Space Apps Challenge 2025 🌌
+**Project presented by team Astro404 as part of the NASA Space Apps Challenge 2025.**
 
-**Proyecto presentado por el equipo Astro404 como parte del NASA Space Apps Challenge 2025.**
+## Description
+ExoLab is an interactive dashboard built with **Streamlit** to explore, analyze, and classify exoplanets using Machine Learning, data science, and visualization. It allows loading a dataset (for example, from NASA KOI/TOI), obtaining statistics, exploring advanced graphics, training models, and making predictions about planetary disposition.
 
-## Descripción
-
-ExoLab es un dashboard interactivo construido con **Streamlit** para explorar, analizar y clasificar exoplanetas usando Machine Learning, ciencia de datos y visualización. Permite cargar un dataset (por ejemplo, de la NASA KOI/TOI), obtener estadísticas, explorar gráficas avanzadas, entrenar modelos y hacer predicciones sobre la disposición planetaria.
-
-## Tecnologías y dependencias principales
-
+## Main Technologies and Dependencies
 - **Python 100%**
-- **Frameworks y librerías:**  
-  - Streamlit (interfaz web)  
-  - Flask (soporte y migración legacy)  
-  - Pandas, NumPy (procesamiento de datos)  
-  - Scikit-learn, XGBoost (ML)  
-  - Plotly, Matplotlib, Seaborn (visualización)  
-  - Joblib (modelos ML)  
-  - Otros: PyArrow, Altair, Watchdog, GitPython, etc.
+- **Frameworks and libraries:**
+  - Streamlit (web interface)
+  - Flask (legacy support and migration)
+  - Pandas, NumPy (data processing)
+  - Scikit-learn, XGBoost (ML)
+  - Plotly, Matplotlib, Seaborn (visualization)
+  - Joblib (ML models)
+  - Others: PyArrow, Altair, Watchdog, GitPython, etc.
 
-_Consulta el archivo requirements.txt para la lista completa de dependencias._
+_Check the requirements.txt file for the complete list of dependencies._
 
-## Estructura del repositorio
-
+## Repository Structure
 ```
-├── app.py                # Aplicación principal Streamlit
-├── requirements.txt      # Dependencias
-├── README.md             # Este documento
-├── .streamlit/           # Configuración de Streamlit
+├── app.py                # Main Streamlit application
+├── requirements.txt      # Dependencies
+├── README.md             # This document
+├── .streamlit/           # Streamlit configuration
 ├── data/                 # Datasets (current_data.csv, uploaded.csv)
-├── models/               # Modelos entrenados (.joblib)
+├── models/               # Trained models (.joblib)
 ├── src/                  
-│   ├── modules/          # Módulos funcionales (ML, data, subida, descarga, etc.)
-│   ├── utils.py          # Utilidades
-│   ├── ...               # Otros scripts asociados
-└── assets/               # Imágenes, iconos (ExoLab.png, IconEL.png)
+│   ├── modules/          # Functional modules (ML, data, upload, download, etc.)
+│   ├── utils.py          # Utilities
+│   ├── ...               # Other associated scripts
+└── assets/               # Images, icons (ExoLab.png, IconEL.png)
 ```
 
-## Principales funcionalidades 🚀
+## Main Features 🚀
+- **CSV Upload** (own or from NASA)
+- **Exploration and statistical analysis:**
+  - Key metrics by columns
+  - Interactive visualizations (distribution, correlation, scatter, histograms)
+- **ML model training:**
+  - RandomForest and XGBoost
+  - Metrics: Accuracy, Precision, Recall, F1, confusion matrix, feature importance
+  - 5-fold cross-validation
+- **Interactive prediction:**
+  - Manual feature input for disposition prediction
+  - Class probability/confidence
+- **Specialized transit analysis:**
+  - Duration vs. depth scatter plot
+  - Analysis by planetary type and scatter plot
 
-- **Carga de CSV** (propio o de la NASA)
-- **Exploración y análisis estadístico:**  
-  - Métricas clave por columnas
-  - Visualizaciones interactivas (distribución, correlación, scatter, histogramas)
-- **Entrenamiento de modelos ML:**  
-  - RandomForest y XGBoost
-  - Métricas: Accuracy, Precision, Recall, F1, matriz de confusión, importancia de variables
-  - Cross-validation 5-fold
-- **Predicción interactiva:**  
-  - Ingreso manual de features para predicción de disposición
-  - Probabilidad/confianza de clase
-- **Análisis especializado de tránsitos:**  
-  - Scatter de duración vs. profundidad
-  - Análisis por tipo planetario y gráfico de dispersión
-
-## Instalación y ejecución
-
+## Installation and Execution
 ```bash
-# Clona el repositorio
+# Clone the repository
 git clone https://github.com/Ainy04/ExoLab-NasaSpacesApp2025.git
 cd ExoLab-NasaSpacesApp2025
 
-# Instala dependencias
+# Install dependencies
 pip install -r requirements.txt
 
-# Ejecuta el dashboard (Streamlit)
+# Run the dashboard (Streamlit)
 streamlit run app.py
 ```
-Accede por tu navegador, sube un CSV y descubre exoplanetas como nunca antes.
 
-## Equipo
+Access through your browser, upload a CSV, and discover exoplanets like never before.
 
-**Astro404**  
-- Coordinación, diseño, ciencia de datos, ML y desarrollo: [Ainy04](https://github.com/Ainy04) y colaboradores de NASA Space Apps MX/CDMX.
+## Team
+**Astro404**
+- Coordination, design, data science, ML, and development: [Ainy04](https://github.com/Ainy04) and collaborators from NASA Space Apps MX/CDMX.
 
-## Recursos útiles
+## Useful Resources
+- Example datasets (/data folder)
+- Custom images and icons
+- Ready-to-download models
+- Modular structure to easily grow the project.
 
-- Ejemplo de datasets (carpeta `/data`)
-- Imágenes e íconos personalizados
-- Modelos listos para descarga
-- Estructura modular para crecer el proyecto fácilmente.
-
-## Licencia
-Proyecto open source presentado para NASA Space Apps Challenge 2025.  
-Desarrollado por Astro404. Todos los derechos reservados.
-
----
+## License
+Open source project presented for NASA Space Apps Challenge 2025.  
+Developed by Astro404. All rights reserved.
