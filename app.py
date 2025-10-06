@@ -1,6 +1,6 @@
 """
-dashboard.py - Versión adaptada sin Flask
-Usa funciones directas en lugar de API REST
+dashboard.py - ExoLab Dashboard sin Flask
+Versión adaptada para usar funciones directas
 """
 import streamlit as st
 import pandas as pd
@@ -10,12 +10,14 @@ import plotly.graph_objects as go
 from io import BytesIO
 import os
 from pathlib import Path
+import time
 
-# FUnciones locales
+# Importar funciones desde src/modules
 from src.modules.data_functions import (
     get_data_info, get_statistics, get_distribution, 
     get_correlation, get_scatter_data, get_sample,
-    get_statistics_no_outliers, scatter_no_outliers
+    get_statistics_no_outliers, scatter_no_outliers,
+    get_dataset_config
 )
 from src.modules.ml_functions import (
     get_class_distribution, transit_analysis, 
@@ -26,10 +28,12 @@ from src.modules.predict_functions import predict
 from src.modules.upload_functions import upload_and_train
 from src.modules.download_functions import read_model_bytes
 
+# Rutas globales
 SCRIPT_DIR = Path(__file__).parent
 DATA_PATH = 'data/uploaded.csv'
 MODEL_PATH = 'models/model.joblib'
 
+# Configuración de Streamlit
 st.set_page_config(
     page_title="ExoLab Dashboard",
     layout="wide",
@@ -37,21 +41,27 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Normalización local en frontend: convierte 0/1 (num o str) a etiquetas legibles UPPERCASE
+
+
+# FUNCIONES AUXILIARES
 def normalize_disposition_series(s):
-    # s: pd.Series
-    mapping = {0: 'NOT CANDIDATE', 1: 'CANDIDATE', '0': 'NOT CANDIDATE', '1': 'CANDIDATE', '0.0': 'NOT CANDIDATE', '1.0': 'CANDIDATE'}
+    """Normalización local: convierte 0/1 a etiquetas legibles"""
+    mapping = {
+        0: 'NOT CANDIDATE', 1: 'CANDIDATE', 
+        '0': 'NOT CANDIDATE', '1': 'CANDIDATE', 
+        '0.0': 'NOT CANDIDATE', '1.0': 'CANDIDATE'
+    }
     try:
         return s.map(mapping).fillna(s.astype(str).str.upper())
     except Exception:
         return s.astype(str).str.upper()
 
+
 def render_stats_table(stats_data):
-    """Renders statistics table - CORRECTED VERSION"""
+    """Convierte estadísticas a DataFrame"""
     if not stats_data or len(stats_data) == 0:
         return None
     
-    # If stats_data is dict of dicts, convert to long format
     if isinstance(stats_data, dict):
         rows = []
         for feature, metrics in stats_data.items():
@@ -60,42 +70,42 @@ def render_stats_table(stats_data):
                 row.update(metrics)
                 rows.append(row)
             else:
-                # Case when it's a pandas series
                 rows.append({'feature': feature, 'value': metrics})
-        
         df = pd.DataFrame(rows)
     else:
-        # If already a DataFrame
         df = pd.DataFrame(stats_data)
     
     return df
 
-def render_correlation_heatmap(correlations, max_features=10):
-    """Renders correlation heatmap"""
-    if not correlations or len(correlations) == 0:
-        return None
-    
-    # Convert to DataFrame
-    df_corr = pd.DataFrame(correlations)
-    
-    # Limit to first N features
-    if len(df_corr) > max_features:
-        df_corr = df_corr.iloc[:max_features, :max_features]
-    
-    return df_corr
 
-# Initialize session state
+def load_default_koi_data():
+    """Carga dataset KOI por defecto de NASA"""
+    try:
+        import requests
+        url = "https://exoplanetarchive.ipac.caltech.edu/cgi-bin/nph-nph-tbl-query.cgi?table=cumulative&select=*&format=csv"
+        response = requests.get(url, timeout=30)
+        if response.status_code == 200:
+            return pd.read_csv(BytesIO(response.content))
+        return None
+    except Exception as e:
+        st.error(f"Error loading default KOI data: {e}")
+        return None
+
+
+
+# SESSION STATE
 if 'model_trained' not in st.session_state:
     st.session_state['model_trained'] = False
 if 'training_in_progress' not in st.session_state:
     st.session_state['training_in_progress'] = False
 if 'page' not in st.session_state:
     st.session_state['page'] = "Data Exploration"
+if 'df_loaded' not in st.session_state:
+    st.session_state['df_loaded'] = None
 
 
 st.markdown("""
 <style>
-/* Hover effect on metrics */
 [data-testid="stMetric"] {
     background: linear-gradient(135deg, #394E7B, #4A46A8);
     padding: 15px;
@@ -122,15 +132,8 @@ st.markdown("""
     background: linear-gradient(135deg, #5B21B6, #7C3AED);
     transform: translateY(-2px);
     box-shadow: 0 6px 20px rgba(74, 70, 168, 0.4);
-    cursor: pointer;
 }
 
-[data-testid="stButton"] > button[kind="primary"]:active {
-    transform: translateY(0);
-    box-shadow: 0 2px 8px rgba(74, 70, 168, 0.3);
-}
-            
-/* General title style */
 h1, h2, h3, h4 {
     color: #E8EAF6;
     transition: color 0.3s ease-in-out;
@@ -139,12 +142,10 @@ h2:hover, h3:hover, h4:hover {
     color: #89BBFE;
 }
 
-/* General background */
 body {
     background-color: #1E2A47;
 }
 
-/* Separators */
 hr {
     border: 1px solid #4A46A8;
     margin: 20px 0;
@@ -152,12 +153,13 @@ hr {
 </style>
 """, unsafe_allow_html=True)
 
+
+# SIDEBAR - ENTRENAMIENTO
 with st.sidebar:
     st.header("ExoLab")
 
     upload_file = st.file_uploader("Upload your file (CSV)", type=['csv'])
     
-    # Selección del modelo
     selected_model = st.radio(
         "Select the ML model to train:",
         ["RandomForest", "XGBoost"],
@@ -165,17 +167,13 @@ with st.sidebar:
         horizontal=True
     )
 
-    # Botón de entrenamiento
     if upload_file is not None:
         if st.button("Upload file and Training Model", type="primary"):
             if not st.session_state['training_in_progress']:
                 st.session_state['training_in_progress'] = True
                 st.rerun()
-    
-    if st.session_state['training_in_progress']:
-        import time
 
-        # Overlay animado (pantalla oscura con spinner)
+    if st.session_state['training_in_progress']:
         overlay = st.empty()
         overlay.markdown("""
         <style>
@@ -229,7 +227,7 @@ with st.sidebar:
         start_time = time.time()
 
         try:
-            # LLAMADA DIRECTA A LA FUNCIÓN (SIN FLASK/REQUESTS)
+            # LLAMADA DIRECTA (SIN FLASK)
             result = upload_and_train(
                 file_content=upload_file,
                 selected_model=selected_model,
@@ -240,7 +238,6 @@ with st.sidebar:
             end_time = time.time()
             elapsed_time = end_time - start_time
 
-            # Mostrar ventana de "Training Completed"
             overlay.markdown(f"""
             <style>
             .overlay {{
@@ -285,10 +282,7 @@ with st.sidebar:
                 st.session_state['dataset_type'] = result.get('dataset_type')
                 st.session_state['page'] = "ML Results"
                 st.session_state['training_in_progress'] = False
-                
-                # Cargar el DataFrame procesado
                 st.session_state['df_loaded'] = pd.read_csv(DATA_PATH)
-                
                 st.success("Model successfully trained.")
                 st.rerun()
             else:
@@ -324,13 +318,13 @@ with st.sidebar:
 
         if page != st.session_state['page']:
             st.session_state['page'] = page
-            st.rerun()            
+            st.rerun()
 
-# Main Page
-# PAGE 1: DATA EXPLORATION (SIN FLASK)
+
+# PAGE 1: DATA EXPLORATION
 if page == "Data Exploration":
     col1, col2 = st.columns([5, 1])
-
+    
     with col1:
         st.title("Welcome!")
         st.write("##### Analyze new data and identify new exoplanets.")
@@ -339,7 +333,7 @@ if page == "Data Exploration":
             the data and test all the dashboard features before uploading
             your own CSV file for machine learning analysis.
         """)
-
+    
     with col2:
         st.image(str(SCRIPT_DIR / "ExoLab.png"), width=120)
 
@@ -353,7 +347,6 @@ if page == "Data Exploration":
             info = get_data_info(df)
             dataset_type = info.get('dataset_type', 'unknown')
             
-            from data_functions import get_dataset_config
             config_data = get_dataset_config(df)
             available_cols = config_data.get('available_columns', {})
 
@@ -426,6 +419,16 @@ if page == "Data Exploration":
                                 st.metric("Median", f"{dist_data['median']:.4f}")
                             with col3:
                                 st.metric("Standard Deviation", f"{dist_data['std']:.4f}")
+
+                        elif 'error' not in dist_data and dist_data['type'] == 'categorical':
+                            counts = dist_data['counts']
+                            fig = px.bar(
+                                x=list(counts.keys()),
+                                y=list(counts.values()),
+                                title=f"Distribution: {selected_feature}",
+                                labels={'x': selected_feature, 'y': 'Count'}
+                            )
+                            st.plotly_chart(fig, use_container_width=True)
 
             with tab3:
                 st.subheader("Correlation Matrix")
@@ -547,12 +550,165 @@ if page == "Data Exploration":
 
                         st.plotly_chart(fig1, use_container_width=True)
 
+                    # Radius vs Period
+                    if 'period' in available_cols and 'radius' in available_cols and 'disposition' in available_cols:
+                        period_col = available_cols['period']
+                        radius_col = available_cols['radius']
+                        disp_col = available_cols['disposition']
+                        
+                        st.markdown("##### **Radius vs Period**")
+                        
+                        df_pre[disp_col] = normalize_disposition_series(df_pre[disp_col])
+                                                        
+                        fig2 = px.scatter(
+                            df_pre,
+                            x=period_col,
+                            y=radius_col,
+                            color=disp_col,
+                            title="Planetary Radius vs Orbital Period",
+                            labels={period_col: "Orbital Period (days)", radius_col: "Radius (Earth radii)"},
+                            log_x=True,
+                            opacity=0.6,
+                            category_orders={disp_col: ['CONFIRMED', 'CANDIDATE', 'FALSE POSITIVE']}
+                        )
+
+                        fig2.update_yaxes(range=[0, 20])
+                        fig2.update_traces(marker=dict(size=6))
+                        fig2.update_layout(
+                            legend=dict(
+                                title="Disposition",
+                                orientation="h",
+                                yanchor="bottom",
+                                y=1.02,
+                                xanchor="center",
+                                x=0.5
+                            )
+                        )
+                        st.plotly_chart(fig2, use_container_width=True)
+
+                    # Dataset-specific scatter
+                    if dataset_type == "koi" and 'temperature' in available_cols and 'radius' in available_cols:
+                        temp_col = available_cols['temperature']
+                        radius_col = available_cols['radius']
+                        disp_col = available_cols.get('disposition')
+                        
+                        st.markdown("##### **Temperature vs Radius**")
+                        fig3 = px.scatter(
+                            df_pre,
+                            x=temp_col,
+                            y=radius_col,
+                            color=disp_col if disp_col else None,
+                            title="Equilibrium Temperature vs Planetary Radius",
+                            labels={temp_col: "Equilibrium Temperature (K)", radius_col: "Radius (Earth radii)"},
+                            opacity=0.6
+                        )
+                        st.plotly_chart(fig3, use_container_width=True)
+
+                    st.markdown("---")
+
+                    # Detailed distributions
+                    n_rows = st.slider("Number of rows to display in the charts:", 100, 2000, 400)
+                    sample_data_hist = get_sample(df, n=n_rows)
+                    df_hist = pd.DataFrame(sample_data_hist)
+
+                    st.markdown("### Detailed Distributions")
+
+                    col1, col2 = st.columns(2)
+                    col3, col4 = st.columns(2)
+                    
+                    # Orbital period
+                    if 'period' in available_cols:
+                        period_col = available_cols['period']
+                        with col1:
+                            fig = px.histogram(
+                                df_hist,
+                                x=period_col,
+                                nbins=50,
+                                title="Orbital Period Distribution (days)",
+                                color_discrete_sequence=["#6F8AB7"]
+                            )
+                            fig.update_xaxes(range=[0, 500])
+                            st.plotly_chart(fig, use_container_width=True)
+
+                    # Planetary radius
+                    if 'radius' in available_cols:
+                        radius_col = available_cols['radius']
+                        with col2:
+                            fig = px.histogram(
+                                df_hist,
+                                x=radius_col,
+                                nbins=50,
+                                title="Planetary Radius Distribution (Earth radii)",
+                                color_discrete_sequence=["#405FA2"]
+                            )
+                            st.plotly_chart(fig, use_container_width=True)
+
+                    # Temperature histogram
+                    if dataset_type in ["koi", "toi"] and 'temperature' in available_cols:
+                        temp_col = available_cols['temperature']
+                        with col3:
+                            fig = px.histogram(
+                                df_hist,
+                                x=temp_col,
+                                nbins=50,
+                                title="Equilibrium Temperature Distribution (K)",
+                                color_discrete_sequence=["#4A46A8"]
+                            )
+                            st.plotly_chart(fig, use_container_width=True)
+
+        else:
+            # Si no hay datos, cargar KOI por defecto
+            st.info("Loading default KOI dataset as example...")
+            df_default = load_default_koi_data()
+            
+            if df_default is not None:
+                st.success(f"Loaded {len(df_default)} objects from NASA Exoplanet Archive")
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Total Objects", len(df_default))
+                with col2:
+                    st.metric("Features", len(df_default.columns))
+                with col3:
+                    st.metric("Dataset", "KOI (Example)")
+                
+                st.markdown("---")
+                
+                st.subheader("Sample Data")
+                n_rows_default = st.slider("Number of rows:", 5, 100, 20, key="default_slider")
+                st.dataframe(df_default.head(n_rows_default), use_container_width=True)
+                
+                st.markdown("---")
+                
+                st.subheader("Basic Statistics")
+                numeric_cols = df_default.select_dtypes(include=[np.number]).columns.tolist()
+                if numeric_cols:
+                    st.dataframe(df_default[numeric_cols].describe(), use_container_width=True)
+                
+                st.markdown("---")
+                
+                if 'koi_pdisposition' in df_default.columns:
+                    st.subheader("Planetary Disposition Distribution")
+                    fig = px.histogram(
+                        df_default,
+                        x='koi_pdisposition',
+                        title="Distribution of Planetary Disposition (KOI Dataset)",
+                        color='koi_pdisposition',
+                        color_discrete_sequence=["#6F8AB7", "#4A46A8", "#8C9AC4"]
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                st.info("Upload your own CSV file in the sidebar to train a model and unlock all features!")
+            else:
+                st.warning("Could not load default dataset. Please upload your own CSV file.")
+
     except Exception as e:
         st.error(f"Error: {e}")
         import traceback
         st.code(traceback.format_exc())
 
-# PAGE 2: ML RESULTS 
+
+# PAGE 2: ML RESULTS
 elif page == "ML Results":
     if st.session_state['training_in_progress']:
         st.info("Training in progress... Please wait")
@@ -563,14 +719,13 @@ elif page == "ML Results":
     st.write("##### **Evaluate your trained model's performance.**")
     st.markdown(""" 
         Explore comprehensive metrics, visualizations, and insights about your 
-        exoplanet classification model. Analyze feature importance, confusion matrices, 
-        and cross-validation results to understand how well your model performs.
+        exoplanet classification model.
     """)
     
     st.markdown("---")
 
     if 'training_results' not in st.session_state:
-        st.warning("First you must train a model in the settings section.")
+        st.warning("First you must train a model.")
     else:
         results = st.session_state['training_results']
 
@@ -588,7 +743,21 @@ elif page == "ML Results":
 
         st.markdown("---")
 
-        tab1, tab2, tab3 = st.tabs(["Model Visualizations", "Exoplanet Analysis", "Detailed Metrics"])
+        st.subheader("Cross-Validation (5-fold)")
+
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("CV Accuracy", f"{results['cross_val']['cv_accuracy_mean']:.2%}")
+        with col2:
+            st.metric("CV Precision", f"{results['cross_val']['cv_precision_mean']:.2%}")
+        with col3:
+            st.metric("CV Recall", f"{results['cross_val']['cv_recall_mean']:.2%}")
+        with col4:
+            st.metric("CV F1-Score", f"{results['cross_val']['cv_f1_mean']:.2%}")
+
+        st.markdown("---")
+
+        tab1, tab2, tab3, tab4 = st.tabs(["Model Visualizations", "Exoplanet Analysis", "Detailed Metrics", "Statistics"])
 
         with tab1:
             st.subheader("Model Visualizations")
@@ -619,6 +788,14 @@ elif page == "ML Results":
                         )
                         fig.update_layout(height=400)
                         st.plotly_chart(fig, use_container_width=True)
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            total_train = sum(class_dist['train'].values())
+                            st.metric("Total Training Samples", total_train)
+                        with col2:
+                            total_test = sum(class_dist['test'].values())
+                            st.metric("Total Test Samples", total_test)
             except Exception as e:
                 st.warning(f"Could not load class distribution: {e}")
             
@@ -749,6 +926,75 @@ elif page == "ML Results":
             
             st.markdown("---")
             
+            # Cross-Validation
+            st.markdown("##### **Cross-Validation (5-fold)**")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                cv_metrics = pd.DataFrame({
+                    'Metric': ['Accuracy', 'Precision', 'Recall', 'F1-Score'],
+                    'Mean': [
+                        results['cross_val']['cv_accuracy_mean'],
+                        results['cross_val']['cv_precision_mean'],
+                        results['cross_val']['cv_recall_mean'],
+                        results['cross_val']['cv_f1_mean']
+                    ],
+                    'Std': [
+                        results['cross_val'].get('cv_accuracy_std', 0),
+                        results['cross_val'].get('cv_precision_std', 0),
+                        results['cross_val'].get('cv_recall_std', 0),
+                        results['cross_val'].get('cv_f1_std', 0)
+                    ]
+                })
+                
+                st.dataframe(cv_metrics, use_container_width=True)
+            
+            with col2:
+                fig = go.Figure()
+                
+                fig.add_trace(go.Bar(
+                    x=cv_metrics['Metric'],
+                    y=cv_metrics['Mean'],
+                    error_y=dict(type='data', array=cv_metrics['Std']),
+                    marker_color='#6F8AB7',
+                    name='Mean ± Std'
+                ))
+                
+                fig.update_layout(
+                    title="Cross-Validation Metrics",
+                    yaxis_title="Value",
+                    height=400,
+                    showlegend=False
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            
+            st.markdown("---")
+            
+            # Label Mapping
+            st.markdown("##### **Label Mapping**")
+            
+            labels = results.get('label_mapping', [])
+            label_info = pd.DataFrame({
+                'Class': labels,
+                'Index': range(len(labels))
+            })
+            
+            col1, col2 = st.columns([1, 2])
+            
+            with col1:
+                st.dataframe(label_info, use_container_width=True)
+            
+            with col2:
+                st.info("""
+                **Class descriptions:**
+                
+                - **NOT CANDIDATE**: Not an exoplanet candidate
+                - **CANDIDATE**: Exoplanet candidate
+                """)
+            
+            st.markdown("---")
+            
             # Model Information
             st.markdown("##### **Model Information**")
             
@@ -765,7 +1011,6 @@ elif page == "ML Results":
             with info_col3:
                 test_ratio = results['test_size'] / results['total_rows']
                 st.metric("Test/Total Ratio", f"{test_ratio:.2%}")
-                labels = results.get('label_mapping', [])
                 st.metric("Classes", len(labels))
 
             # Download Model Button
@@ -784,7 +1029,67 @@ elif page == "ML Results":
                 except Exception as e:
                     st.error(f"Error: {e}")
 
-# PAGE 3: PREDICTION (SIN FLASK)
+        with tab4:
+            st.subheader("Feature Statistics Used in Model")
+            
+            try:
+                if os.path.exists(DATA_PATH):
+                    df = pd.read_csv(DATA_PATH)
+                    stats = get_statistics(df)
+                    df_stats = render_stats_table(stats)
+                    
+                    if df_stats is not None and not df_stats.empty:
+                        if 'feature_importances' in results:
+                            model_features = [f['feature'] for f in results['feature_importances']]
+                            
+                            if 'feature' in df_stats.columns:
+                                df_stats_filtered = df_stats[df_stats['feature'].isin(model_features)]
+                            else:
+                                df_stats_filtered = df_stats
+                            
+                            st.markdown("##### **Statistics of Model Features**")
+                            st.dataframe(df_stats_filtered, use_container_width=True)
+                            
+                            # Mean distribution
+                            if 'mean' in df_stats_filtered.columns and 'feature' in df_stats_filtered.columns:
+                                st.markdown("---")
+                                st.markdown("##### **Mean Distribution of Top Features**")
+                                
+                                top_stats = df_stats_filtered.head(20)
+                                
+                                fig = px.bar(
+                                    top_stats,
+                                    x='feature',
+                                    y='mean',
+                                    title="Mean Values - Top 20 Model Features",
+                                    color='std' if 'std' in top_stats.columns else None,
+                                    color_continuous_scale='Viridis'
+                                )
+                                fig.update_layout(height=500, xaxis_tickangle=-45)
+                                st.plotly_chart(fig, use_container_width=True)
+                            
+                            st.markdown("---")
+                            
+                            # Download button
+                            csv_buffer = BytesIO()
+                            df_stats_filtered.to_csv(csv_buffer, index=False)
+                            csv_buffer.seek(0)
+
+                            st.download_button(
+                                label="Download Model Feature Statistics (CSV)",
+                                data=csv_buffer,
+                                file_name="model_feature_statistics.csv",
+                                mime="text/csv"
+                            )
+                        else:
+                            st.warning("No feature importance data available")
+                    else:
+                        st.warning("No statistics data available")
+            except Exception as e:
+                st.error(f"Error loading statistics: {e}")
+
+
+# PAGE 3: PREDICTION
 elif page == "Prediction":
     if st.session_state['training_in_progress']:
         st.info("Training in progress... Please wait")
@@ -794,8 +1099,7 @@ elif page == "Prediction":
     st.write("##### **Make real-time predictions with your trained model.**")
     st.markdown(""" 
         Input feature values to classify potential exoplanets. The model will 
-        analyze your data and predict whether the object is a confirmed exoplanet, 
-        a false positive, or a candidate requiring further observation.
+        analyze your data and predict whether the object is a candidate or not.
     """)
     
     st.markdown("---")
@@ -817,9 +1121,7 @@ elif page == "Prediction":
 
         if st.button("Make Prediction", type="primary"):
             try:
-                # ===================================================
-                # LLAMADA DIRECTA A LA FUNCIÓN (SIN FLASK/REQUESTS)
-                # ===================================================
+                # LLAMADA DIRECTA (SIN FLASK)
                 prediction_result = predict(MODEL_PATH, input_data)
                 
                 if 'error' not in prediction_result:
