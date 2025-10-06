@@ -28,8 +28,7 @@ _Check the requirements.txt file for the complete list of dependencies._
 ├── src/                  
 │   ├── modules/          # Functional modules (ML, data, upload, download, etc.)
 │   ├── utils.py          # Utilities
-│   ├── ...               # Other associated scripts
-└── assets/               # Images, icons (ExoLab.png, IconEL.png)
+└── ├── ...               # Other associated scripts and Images, icons (ExoLab.png, IconEL.png)
 ```
 
 ## Main Features 🚀
@@ -76,4 +75,5 @@ Access through your browser, upload a CSV, and discover exoplanets like never be
 ## License
 Open source project presented for NASA Space Apps Challenge 2025.  
 Developed by Astro404. All rights reserved.
+
 
